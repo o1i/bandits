@@ -5,7 +5,7 @@ import numpy as np
 from bandits.arms import Arm
 
 
-class Bandit:
+class BanditPlayer:
     """
         Bandit to be used in learning. Offers the following API:
 
