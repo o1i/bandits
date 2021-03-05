@@ -45,3 +45,6 @@ class GaussianMixtureArm(Arm):
     def value(self, contexts: np.ndarray):
         ev = self.ev(contexts)
         return ev + np.random.normal(0, self.noise, ev.shape), ev
+
+    def move_centres(self, std=1):
+        self.centres = self.centres + np.random.normal(0, std, self.centres.shape)
