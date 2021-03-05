@@ -35,11 +35,27 @@ class SGDLearner(BanditLearner):
 
 class XGBLearner(BanditLearner):
     """Uses XGBoost as learner"""
-    def __init__(self, n_learners: int, n_trees: int):
+    def __init__(self, n_learners: int, n_trees: int, n_retrain=100, n_max=10000):
         learners = dict()
+        self.obs = dict()  # to hold 4-tuples of states, rewards and "counts since last training"
+        self.n_retrain = n_retrain
+        self.n_max = n_max
         for i in range(n_learners):
             learners[f"a{i}"] = xgb.XGBRegressor(n_estimators=n_trees)
         super().__init__(learners)
 
     def update(self, s, a, r):
-        self.learners[a].fit(s, np.array(r))
+        if not a in self.obs.keys():
+            self.obs[a] = (s, r, 0)
+            self.learners[a].fit(s, r)
+        else:
+            s_old, r_old, count_old = self.obs[a]
+            s_new = np.concatenate([s_old, s], 0)[-self.n_max:, :]
+            r_new = np.concatenate([r_old, r])[-self.n_max:]
+            count_new = count_old + s.shape[0]
+            if count_new > self.n_retrain:
+                self.learners[a].fit(s_new, r_new)
+                count_new = 0
+            self.obs[a] = (s_new,
+                           r_new,
+                           count_new)

@@ -15,7 +15,7 @@ class BanditPlayer:
                                                                each context, return value and regret
         - play_one(context, choice) -> float, float  # given a single context gets observed value and regret
     """
-    def __init__(self, arms: dict[str, Arm]):
+    def __init__(self, arms: dict):
         """
         :param arms: Arms to be used at initialisation
         """
