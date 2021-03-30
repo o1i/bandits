@@ -1,3 +1,8 @@
+"""Bandit learners ar the entities that learn which arms to play in which contexts
+
+Here is where the ML happens.
+"""
+from collections import defaultdict
 import numpy as np
 from sklearn.linear_model import SGDRegressor
 import xgboost as xgb
@@ -7,8 +12,8 @@ class BanditLearner():
     """Class that has models for every arm and makes decsions based on the best outcome
 
     Offers the following API:
-    - choose(s: np.array) -> str   # Chooses the arm to pick for that state (context)
-    - update(s, a, r) -> None      # Updates the arm with state and reward
+    - choose(s: np.array) -> str   # Chooses the arm to pick for input states (contexts)
+    - update(s, a, r) -> None      # Updates the internal model(s) with state and reward
     """
     def __init__(self, learners: dict):
         self.learners = learners
@@ -59,3 +64,23 @@ class XGBLearner(BanditLearner):
             self.obs[a] = (s_new,
                            r_new,
                            count_new)
+
+
+class OptimisticSGDLearner(SGDLearner):
+    """Uses SGDRegressor as learners"""
+    def __init__(self, *args, alpha: float=0.9, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pred_error = defaultdict(lambda: 0)
+        self.alpha = alpha
+
+    def update(self, s, a, r):
+        try:
+            pred = self.learners[a].predict(s)
+        except:
+            pred = 0
+        self.pred_error[a] = self.alpha * self.pred_error[a] + (1 - self.alpha) * sum(abs(pred - np.array(r)))
+        self.learners[a].partial_fit(s, np.array(r))
+
+    def choose(self, s: np.array):
+        values = {k: v.predict(s) + (self.pred_error[k] if self.pred_error[k] else 0) for k, v in self.learners.items()}
+        return max(values, key=values.get)

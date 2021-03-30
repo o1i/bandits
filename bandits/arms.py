@@ -1,13 +1,11 @@
-"""Valuation for the bandits.
+"""Ground truth value models for the bandits
 
-This class can be used to calculate the arms of any arm given the input contexts.
-Can be modified to add/remove arms or have non-stationary arms over time.
+An arm is a model R^D -> R that takes a D-dimensional input and returns a value composed of a deterministic part and
+a random part with 0 expected value.
 
-Currently the true expected arms follow multiples of gaussion mixtures on the context space onto which random
+Currently the true expected values follow multiples of gaussion mixtures on the context space onto which random normal
 noise is added.
 """
-from collections import defaultdict
-
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
@@ -46,5 +44,10 @@ class GaussianMixtureArm(Arm):
         ev = self.ev(contexts)
         return ev + np.random.normal(0, self.noise, ev.shape), ev
 
-    def move_centres(self, std=1):
-        self.centres = self.centres + np.random.normal(0, std, self.centres.shape)
+    def move_centres(self, std=1, abs_diff: np.ndarray = None):
+        """Shifts centres either randomly or by absolute numbers. In the latter case, array dimension must match"""
+        if abs_diff is not None:
+            assert self.centres.shape == abs_diff.shape, f"Shape was {abs_diff.shape}, should be {self.centres.shape}"
+            self.centres += abs_diff
+        else:
+            self.centres = self.centres + np.random.normal(0, std, self.centres.shape)
