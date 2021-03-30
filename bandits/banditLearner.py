@@ -7,6 +7,8 @@ import numpy as np
 from sklearn.linear_model import SGDRegressor
 import xgboost as xgb
 
+import river
+
 
 class BanditLearner():
     """Class that has models for every arm and makes decsions based on the best outcome
@@ -83,4 +85,19 @@ class OptimisticSGDLearner(SGDLearner):
 
     def choose(self, s: np.array):
         values = {k: v.predict(s) + (self.pred_error[k] if self.pred_error[k] else 0) for k, v in self.learners.items()}
+        return max(values, key=values.get)
+
+
+class AdaptiveRandomForestLearner(BanditLearner):
+    def __init__(self, n_learners: int, n_trees: int = 21):
+        learners = dict()
+        for i in range(n_learners):
+            learners[f"a{i}"] = river.ensemble.AdaptiveRandomForestRegressor(n_models=n_trees)
+        super().__init__(learners)
+
+    def update(self, s, a, r):
+        self.learners[a].learn_one({str(i): v for i, v in enumerate(s.squeeze())}, r)
+
+    def choose(self, s: np.array):
+        values = {k: v.predict_one({str(i): v for i, v in enumerate(s.squeeze())}) for k, v in self.learners.items()}
         return max(values, key=values.get)
