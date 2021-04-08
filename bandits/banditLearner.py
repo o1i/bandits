@@ -89,15 +89,56 @@ class OptimisticSGDLearner(SGDLearner):
 
 
 class AdaptiveRandomForestLearner(BanditLearner):
-    def __init__(self, n_learners: int, n_trees: int = 21):
+    def __init__(self, n_learners: int, n_trees: int = 21, eps=0.1):
         learners = dict()
         for i in range(n_learners):
             learners[f"a{i}"] = river.ensemble.AdaptiveRandomForestRegressor(n_models=n_trees)
+        self.eps = eps
         super().__init__(learners)
 
     def update(self, s, a, r):
         self.learners[a].learn_one({str(i): v for i, v in enumerate(s.squeeze())}, r)
 
     def choose(self, s: np.array):
-        values = {k: v.predict_one({str(i): v for i, v in enumerate(s.squeeze())}) for k, v in self.learners.items()}
-        return max(values, key=values.get)
+        if np.random.random() > self.eps:
+            values = {k: v.predict_one({str(i): v for i, v in enumerate(s.squeeze())}) for k, v in self.learners.items()}
+            return max(values, key=values.get)
+        return np.random.choice(list(self.learners.keys()))
+
+
+class PerceptronLearner(BanditLearner):
+    def __init__(self, n_learners: int, l2: int = 0, eps=0.1):
+        learners = dict()
+        for i in range(n_learners):
+            learners[f"a{i}"] = river.linear_model.Perceptron(l2=l2)
+        self.eps = eps
+        super().__init__(learners)
+
+    def update(self, s, a, r):
+        self.learners[a].learn_one({str(i): v for i, v in enumerate(s.squeeze())}, r)
+
+    def choose(self, s: np.array):
+        if np.random.random() > self.eps:
+            values = {k: v.predict_one({str(i): v for i, v in enumerate(s.squeeze())}) for k, v in self.learners.items()}
+            return max(values, key=values.get)
+        return np.random.choice(list(self.learners.keys()))
+
+
+class BaggedLinearRegressor(BanditLearner):
+    def __init__(self, n_learners: int, n_models: int = 5, eps=0.1):
+        learners = dict()
+        for i in range(n_learners):
+            learners[f"a{i}"] = river.ensemble.BaggingRegressor(
+                model=river.linear_model.LinearRegression(),
+                n_models=n_models)
+        self.eps = eps
+        super().__init__(learners)
+
+    def update(self, s, a, r):
+        self.learners[a].learn_one({str(i): v for i, v in enumerate(s.squeeze())}, r)
+
+    def choose(self, s: np.array):
+        if np.random.random() > self.eps:
+            values = {k: v.predict_one({str(i): v for i, v in enumerate(s.squeeze())}) for k, v in self.learners.items()}
+            return max(values, key=values.get)
+        return np.random.choice(list(self.learners.keys()))
