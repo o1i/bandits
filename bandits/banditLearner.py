@@ -89,10 +89,10 @@ class OptimisticSGDLearner(SGDLearner):
 
 
 class AdaptiveRandomForestLearner(BanditLearner):
-    def __init__(self, n_learners: int, n_trees: int = 21, eps=0.1):
+    def __init__(self, n_learners: int, n_trees: int = 21, eps=0.1, **kwargs):
         learners = dict()
         for i in range(n_learners):
-            learners[f"a{i}"] = river.ensemble.AdaptiveRandomForestRegressor(n_models=n_trees)
+            learners[f"a{i}"] = river.ensemble.AdaptiveRandomForestRegressor(n_models=n_trees, **kwargs)
         self.eps = eps
         super().__init__(learners)
 
@@ -106,11 +106,11 @@ class AdaptiveRandomForestLearner(BanditLearner):
         return np.random.choice(list(self.learners.keys()))
 
 
-class PerceptronLearner(BanditLearner):
+class PerceptronLearner(BanditLearner):  # Useless, this is a classifier
     def __init__(self, n_learners: int, l2: int = 0, eps=0.1):
         learners = dict()
         for i in range(n_learners):
-            learners[f"a{i}"] = river.linear_model.Perceptron(l2=l2)
+            learners[f"a{i}"] = river.preprocessing.StandardScaler() | river.linear_model.Perceptron(l2=l2)
         self.eps = eps
         super().__init__(learners)
 
@@ -125,12 +125,34 @@ class PerceptronLearner(BanditLearner):
 
 
 class BaggedLinearRegressor(BanditLearner):
-    def __init__(self, n_learners: int, n_models: int = 5, eps=0.1):
+    def __init__(self, n_learners: int, n_models: int = 7, eps=0.1):
         learners = dict()
         for i in range(n_learners):
             learners[f"a{i}"] = river.ensemble.BaggingRegressor(
-                model=river.linear_model.LinearRegression(),
+                model=river.preprocessing.StandardScaler() | river.linear_model.LinearRegression(optimizer=river.optim.SGD(lr=0.003)),
                 n_models=n_models)
+        self.eps = eps
+        super().__init__(learners)
+
+    def update(self, s, a, r):
+        self.learners[a].learn_one({str(i): v for i, v in enumerate(s.squeeze())}, r)
+
+    def choose(self, s: np.array):
+        if np.random.random() > self.eps:
+            values = {k: v.predict_one({str(i): v for i, v in enumerate(s.squeeze())}) for k, v in self.learners.items()}
+            return max(values, key=values.get)
+        return np.random.choice(list(self.learners.keys()))
+
+
+class LinearExpertsLearner(BanditLearner):
+    def __init__(self, n_learners: int, lrs: tuple = (0.005, 0.003, 0.001, 0.0007), eps=0.1):
+        learners = dict()
+        for i in range(n_learners):
+            models = [
+                river.preprocessing.StandardScaler() | river.linear_model.LinearRegression(optimizer=river.optim.SGD(lr=lr))
+                for lr in lrs
+            ]
+            learners[f"a{i}"] = river.expert.EpsilonGreedyRegressor(models=models)
         self.eps = eps
         super().__init__(learners)
 
